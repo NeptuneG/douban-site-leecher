@@ -1,15 +1,15 @@
-package main
+package leecher
 
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"os/user"
 	"strings"
+	"time"
 )
 
 // Record 是对应song_records json字符串的结构体
@@ -23,25 +23,35 @@ type Record struct {
 }
 
 const (
-	defaultURL       = "http://site.douban.com/"
+	defaultURL       = "https://site.douban.com/"
 	jsonPrefix       = "[{"
 	jsonSuffix       = "}]"
 	targetLinePrefix = "song_records"
 	bufferSize       = 1024 * 8
 )
 
-// 命令行参数: 完整豆瓣小站URL或URL后缀
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("请输入豆瓣小站网址或后缀，如：https://site.douban.com/chinesefootball 或 chinesefootball")
-		os.Exit(1)
+// Handler 就是用来搞事情的函数了
+func Handler(w http.ResponseWriter, r *http.Request) {
+	url, err := getURL(r.RequestURI)
+	if err != nil {
+		log.Output(0, err.Error())
+		return
 	}
 
-	url := getURL(os.Args[1])
-
 	response, err := http.Get(url)
-	checkError(err)
+	if err != nil {
+		log.Output(0, err.Error())
+		return
+	}
 	defer response.Body.Close()
+
+	// 创建临时文件夹用存放下载文件以供打包
+	tmpDirName := getTempDirName()
+	err1 := os.Mkdir(tmpDirName, os.ModeDir)
+	if err1 != nil {
+		log.Output(0, err1.Error())
+		return
+	}
 
 	reader := bufio.NewReaderSize(response.Body, bufferSize)
 	for {
@@ -51,6 +61,7 @@ func main() {
 			if err == io.EOF {
 				break
 			}
+			log.Output(0, err.Error())
 		}
 
 		line := string(buf)
@@ -59,25 +70,26 @@ func main() {
 			records := make([]Record, 0)
 			strJSON := getJSONstring(line)
 			err1 := json.Unmarshal([]byte(strJSON), &records)
-			checkError(err1)
-			err2 := download(records)
-			checkError(err2)
+			if err1 != nil {
+				log.Output(0, err1.Error())
+				return
+			}
+			err2 := download(tmpDirName, records)
+			if err2 != nil {
+				log.Output(0, err2.Error())
+				return
+			}
 		}
 	}
 }
 
-func getURL(arg string) string {
-	if strings.HasPrefix(arg, defaultURL) {
-		return arg
+func getURL(arg string) (string, error) {
+	tokens := strings.Split(arg, "/")
+	if len(tokens) != 3 {
+		return "", errors.New("无法识别的URI")
 	}
-	return defaultURL + arg
-}
 
-func checkError(err error) {
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
+	return defaultURL + tokens[2], nil
 }
 
 func isSongRecords(line string) bool {
@@ -89,9 +101,9 @@ func getJSONstring(line string) string {
 	return line[strings.Index(line, jsonPrefix) : strings.LastIndex(line, jsonSuffix)+len(jsonSuffix)]
 }
 
-func download(records []Record) error {
+func download(targetDir string, records []Record) error {
 	for _, record := range records {
-		filename, err := getFileName(record)
+		filename, err := getFileName(targetDir, record)
 		if err != nil {
 			return err
 		}
@@ -116,12 +128,11 @@ func download(records []Record) error {
 	return nil
 }
 
-func getFileName(record Record) (string, error) {
-	user, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	dirname := user.HomeDir + "/Downloads/"
-	filename := record.Name + record.RawURL[strings.LastIndex(record.RawURL, "."):]
-	return dirname + filename, nil
+func getFileName(dirname string, record Record) (string, error) {
+	filename := dirname + "/" + record.Name + record.RawURL[strings.LastIndex(record.RawURL, "."):]
+	return filename, nil
+}
+
+func getTempDirName() string {
+	return time.Now().Format("20060102150405")
 }
