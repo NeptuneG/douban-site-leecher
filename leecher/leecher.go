@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -35,16 +34,13 @@ const (
 
 // Handler 就是用来搞事情的函数了
 func Handler(w http.ResponseWriter, r *http.Request) {
-	log.Output(0, "RequestURI: "+r.RequestURI)
 	url, err := getURL(r.RequestURI)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 
 	response, err := http.Get(url)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 	defer response.Body.Close()
@@ -54,7 +50,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	tmpFileName := tmpDirName + ".zip"
 	err = os.Mkdir(tmpDirName, os.ModeDir)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 
@@ -66,7 +61,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			if err == io.EOF {
 				break
 			}
-			log.Output(0, err.Error())
 		}
 
 		line := string(buf)
@@ -76,12 +70,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			strJSON := getJSONstring(line)
 			err = json.Unmarshal([]byte(strJSON), &records)
 			if err != nil {
-				log.Output(0, err.Error())
 				return
 			}
 			err = download(tmpDirName, records)
 			if err != nil {
-				log.Output(0, err.Error())
 				return
 			}
 		}
@@ -89,29 +81,24 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	err = zipit(tmpDirName, tmpFileName)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 
 	file, err := os.Open(tmpFileName)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 	_, err = io.Copy(w, file)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 	err = file.Close()
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 
 	err = removeTmpFiles(tmpFileName, tmpDirName)
 	if err != nil {
-		log.Output(0, err.Error())
 		return
 	}
 }
@@ -150,12 +137,10 @@ func download(targetDir string, records []Record) error {
 			return err
 		}
 		defer response.Body.Close()
-		log.Output(0, "从"+record.RawURL+"开始下载："+record.Name)
 		_, err1 := io.Copy(file, response.Body)
 		if err1 != nil {
 			return err
 		}
-		log.Output(0, "完成下载："+record.Name)
 	}
 
 	return nil
