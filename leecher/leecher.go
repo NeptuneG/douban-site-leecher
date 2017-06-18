@@ -33,14 +33,8 @@ const (
 	timeformat       = "20060102150405"
 )
 
-var logger *log.Logger
-
 // Handler 就是用来搞事情的函数了
 func Handler(w http.ResponseWriter, r *http.Request) {
-	f, _ := os.Create("douban-site-leecher.log")
-	defer f.Close()
-	logger = log.New(f, "logger: ", log.Lshortfile)
-
 	url, err := getURL(r.RequestURI)
 	if isFailed(err) {
 		return
@@ -144,10 +138,12 @@ func download(targetDir string, records []Record) error {
 			return err
 		}
 		defer response.Body.Close()
+		log.Println("从<" + record.RawURL + ">开始下载: " + record.Name)
 		_, err1 := io.Copy(file, response.Body)
 		if err1 != nil {
 			return err
 		}
+		log.Println("完成下载：" + record.Name)
 	}
 
 	return nil
@@ -237,8 +233,7 @@ func removeTmpFiles(tmpFileName, tmpDirName string) error {
 
 func isFailed(err error) bool {
 	if err != nil {
-		//fmt.Fprintf(os.Stderr, err.Error())
-		logger.Println(err.Error())
+		log.Println(err.Error())
 		return true
 	}
 	return false
