@@ -17,7 +17,7 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
-	http.HandleFunc("/leecher/", leecher.Handler)
+	http.HandleFunc("/", leecher.Handler)
 
 	log.Printf("Listening on port %s\n\n", port)
 	http.ListenAndServe(":"+port, nil)

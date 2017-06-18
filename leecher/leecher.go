@@ -31,11 +31,11 @@ const (
 	targetLinePrefix = "song_records"
 	bufferSize       = 1024 * 8
 	timeformat       = "20060102150405"
-	tmpFileName      = "leeched.zip"
 )
 
 // Handler 就是用来搞事情的函数了
 func Handler(w http.ResponseWriter, r *http.Request) {
+	log.Output(0, "RequestURI: "+r.RequestURI)
 	url, err := getURL(r.RequestURI)
 	if err != nil {
 		log.Output(0, err.Error())
@@ -50,10 +50,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	defer response.Body.Close()
 
 	// 创建临时文件夹用存放下载文件以供打包
-	tmpDirName := getTempDirName()
-	err1 := os.Mkdir(tmpDirName, os.ModeDir)
-	if err1 != nil {
-		log.Output(0, err1.Error())
+	tmpDirName := getTimeStamp()
+	tmpFileName := tmpDirName + ".zip"
+	err = os.Mkdir(tmpDirName, os.ModeDir)
+	if err != nil {
+		log.Output(0, err.Error())
 		return
 	}
 
@@ -73,40 +74,55 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		if isSongRecords(line) {
 			records := make([]Record, 0)
 			strJSON := getJSONstring(line)
-			err1 := json.Unmarshal([]byte(strJSON), &records)
-			if err1 != nil {
-				log.Output(0, err1.Error())
+			err = json.Unmarshal([]byte(strJSON), &records)
+			if err != nil {
+				log.Output(0, err.Error())
 				return
 			}
-			err2 := download(tmpDirName, records)
-			if err2 != nil {
-				log.Output(0, err2.Error())
+			err = download(tmpDirName, records)
+			if err != nil {
+				log.Output(0, err.Error())
 				return
 			}
 		}
 	}
 
-	err2 := zipit(tmpDirName, tmpFileName)
-	if err2 != nil {
+	err = zipit(tmpDirName, tmpFileName)
+	if err != nil {
+		log.Output(0, err.Error())
 		return
 	}
 
-	file, err3 := os.Open(tmpFileName)
-	if err3 != nil {
+	file, err := os.Open(tmpFileName)
+	if err != nil {
+		log.Output(0, err.Error())
 		return
 	}
-	defer file.Close()
-	io.Copy(w, file)
-	os.Remove(tmpFileName)
+	_, err = io.Copy(w, file)
+	if err != nil {
+		log.Output(0, err.Error())
+		return
+	}
+	err = file.Close()
+	if err != nil {
+		log.Output(0, err.Error())
+		return
+	}
+
+	err = removeTmpFiles(tmpFileName, tmpDirName)
+	if err != nil {
+		log.Output(0, err.Error())
+		return
+	}
 }
 
 func getURL(arg string) (string, error) {
 	tokens := strings.Split(arg, "/")
-	if len(tokens) != 3 {
+	if len(tokens) != 2 {
 		return "", errors.New("无法识别的URI")
 	}
 
-	return defaultURL + tokens[2], nil
+	return defaultURL + tokens[1], nil
 }
 
 func isSongRecords(line string) bool {
@@ -134,7 +150,7 @@ func download(targetDir string, records []Record) error {
 			return err
 		}
 		defer response.Body.Close()
-		log.Output(0, "开始下载："+record.Name)
+		log.Output(0, "从"+record.RawURL+"开始下载："+record.Name)
 		_, err1 := io.Copy(file, response.Body)
 		if err1 != nil {
 			return err
@@ -150,7 +166,7 @@ func getFileName(dirname string, record Record) (string, error) {
 	return filename, nil
 }
 
-func getTempDirName() string {
+func getTimeStamp() string {
 	return time.Now().Format(timeformat)
 }
 
@@ -213,4 +229,16 @@ func zipit(source, target string) error {
 	})
 
 	return err
+}
+
+func removeTmpFiles(tmpFileName, tmpDirName string) error {
+	err := os.Remove(tmpFileName)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(tmpDirName)
+	if err != nil {
+		return err
+	}
+	return nil
 }
