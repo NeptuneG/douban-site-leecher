@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -35,12 +36,12 @@ const (
 // Handler 就是用来搞事情的函数了
 func Handler(w http.ResponseWriter, r *http.Request) {
 	url, err := getURL(r.RequestURI)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 
 	response, err := http.Get(url)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 	defer response.Body.Close()
@@ -49,7 +50,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	tmpDirName := getTimeStamp()
 	tmpFileName := tmpDirName + ".zip"
 	err = os.Mkdir(tmpDirName, os.ModeDir)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 
@@ -69,36 +70,36 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			records := make([]Record, 0)
 			strJSON := getJSONstring(line)
 			err = json.Unmarshal([]byte(strJSON), &records)
-			if err != nil {
+			if isFailed(err) {
 				return
 			}
 			err = download(tmpDirName, records)
-			if err != nil {
+			if isFailed(err) {
 				return
 			}
 		}
 	}
 
 	err = zipit(tmpDirName, tmpFileName)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 
 	file, err := os.Open(tmpFileName)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 	_, err = io.Copy(w, file)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 	err = file.Close()
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 
 	err = removeTmpFiles(tmpFileName, tmpDirName)
-	if err != nil {
+	if isFailed(err) {
 		return
 	}
 }
@@ -226,4 +227,12 @@ func removeTmpFiles(tmpFileName, tmpDirName string) error {
 		return err
 	}
 	return nil
+}
+
+func isFailed(err error) bool {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, err.Error())
+		return true
+	}
+	return false
 }
