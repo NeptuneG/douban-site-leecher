@@ -123,27 +123,44 @@ func getJSONstring(line string) string {
 }
 
 func download(targetDir string, records []Record) error {
-	for _, record := range records {
-		filename, err := getFileName(targetDir, record)
+	chs := make([]chan error, len(records))
+	for i, record := range records {
+		chs[i] = make(chan error)
+		go func(ch chan error, record Record) {
+			filename, err := getFileName(targetDir, record)
+			if err != nil {
+				ch <- err
+				return
+			}
+			file, err := os.Create(filename)
+			if err != nil {
+				ch <- err
+				return
+			}
+			defer file.Close()
+			response, err := http.Get(record.RawURL)
+			if err != nil {
+				ch <- err
+				return
+			}
+			defer response.Body.Close()
+			log.Println("从<" + record.RawURL + ">开始下载: " + record.Name)
+			_, err = io.Copy(file, response.Body)
+			if err != nil {
+				ch <- err
+				return
+			}
+			log.Println("完成下载：" + record.Name)
+			ch <- nil
+		}(chs[i], record)
+	}
+
+	for i, ch := range(chs) {
+		err := <- ch
 		if err != nil {
+			log.Println("处理<" + records[i].RawURL +">时出错")
 			return err
 		}
-		file, err := os.Create(filename)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		response, err := http.Get(record.RawURL)
-		if err != nil {
-			return err
-		}
-		defer response.Body.Close()
-		log.Println("从<" + record.RawURL + ">开始下载: " + record.Name)
-		_, err1 := io.Copy(file, response.Body)
-		if err1 != nil {
-			return err
-		}
-		log.Println("完成下载：" + record.Name)
 	}
 
 	return nil
