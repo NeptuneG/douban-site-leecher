@@ -1,10 +1,10 @@
-package leecher
+package main
 
 import (
 	"archive/zip"
 	"bufio"
 	"encoding/json"
-	"errors"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -33,84 +33,90 @@ const (
 	timeformat       = "20060102150405"
 )
 
-// Handler 就是用来搞事情的函数了
+// Handler 负责处理请求
 func Handler(w http.ResponseWriter, r *http.Request) {
-	url, err := getURL(r.RequestURI)
-	if isFailed(err) {
-		return
-	}
+	if r.Method == "GET" {
+		t, err := template.ParseFiles("server.gtpl")
+		if isFailed(err) {
+			return
+		}
+		err = t.Execute(w, nil)
+		if isFailed(err) {
+			return
+		}
+	} else {
+		url, err := getURL(r.FormValue("URI"))
+		if isFailed(err) {
+			return
+		}
 
-	response, err := http.Get(url)
-	if isFailed(err) {
-		return
-	}
-	defer response.Body.Close()
+		response, err := http.Get(url)
+		if isFailed(err) {
+			return
+		}
+		defer response.Body.Close()
 
-	// 创建临时文件夹用存放下载文件以供打包
-	tmpDirName := getTimeStamp()
-	tmpFileName := tmpDirName + ".zip"
-	err = os.Mkdir(tmpDirName, os.ModeDir)
-	if isFailed(err) {
-		return
-	}
+		// 创建临时文件夹用存放下载文件以供打包
+		tmpDirName := getTimeStamp()
+		tmpFileName := tmpDirName + ".zip"
+		err = os.Mkdir(tmpDirName, os.ModeDir)
+		if isFailed(err) {
+			return
+		}
 
-	reader := bufio.NewReaderSize(response.Body, bufferSize)
-	for {
-		buf := make([]byte, 0)
-		buf, _, err := reader.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				break
+		reader := bufio.NewReaderSize(response.Body, bufferSize)
+		for {
+			buf := make([]byte, 0)
+			buf, _, err := reader.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+			}
+
+			line := string(buf)
+
+			if isSongRecords(line) {
+				records := make([]Record, 0)
+				strJSON := getJSONstring(line)
+				err = json.Unmarshal([]byte(strJSON), &records)
+				if isFailed(err) {
+					return
+				}
+				err = download(tmpDirName, records)
+				if isFailed(err) {
+					return
+				}
 			}
 		}
 
-		line := string(buf)
-
-		if isSongRecords(line) {
-			records := make([]Record, 0)
-			strJSON := getJSONstring(line)
-			err = json.Unmarshal([]byte(strJSON), &records)
-			if isFailed(err) {
-				return
-			}
-			err = download(tmpDirName, records)
-			if isFailed(err) {
-				return
-			}
+		err = zipit(tmpDirName, tmpFileName)
+		if isFailed(err) {
+			return
 		}
-	}
 
-	err = zipit(tmpDirName, tmpFileName)
-	if isFailed(err) {
-		return
-	}
+		file, err := os.Open(tmpFileName)
+		if isFailed(err) {
+			return
+		}
+		_, err = io.Copy(w, file)
+		if isFailed(err) {
+			return
+		}
+		err = file.Close()
+		if isFailed(err) {
+			return
+		}
 
-	file, err := os.Open(tmpFileName)
-	if isFailed(err) {
-		return
-	}
-	_, err = io.Copy(w, file)
-	if isFailed(err) {
-		return
-	}
-	err = file.Close()
-	if isFailed(err) {
-		return
-	}
-
-	err = removeTmpFiles(tmpFileName, tmpDirName)
-	if isFailed(err) {
-		return
+		err = removeTmpFiles(tmpFileName, tmpDirName)
+		if isFailed(err) {
+			return
+		}
 	}
 }
 
 func getURL(arg string) (string, error) {
-	tokens := strings.Split(arg, "/")
-	if len(tokens) != 2 {
-		return "", errors.New("无法识别的URI")
-	}
-
-	return defaultURL + tokens[1], nil
+	return defaultURL + arg, nil
 }
 
 func isSongRecords(line string) bool {

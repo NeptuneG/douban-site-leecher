@@ -4,8 +4,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/NeptuneG/douban-site-leecher/leecher"
 )
 
 func main() {
@@ -18,7 +16,7 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
-	http.HandleFunc("/", leecher.Handler)
+	http.HandleFunc("/", Handler)
 
 	log.Printf("Listening on port %s\n\n", port)
 	http.ListenAndServe(":"+port, nil)
