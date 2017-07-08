@@ -161,10 +161,10 @@ func download(targetDir string, records []Record) error {
 		}(chs[i], record)
 	}
 
-	for i, ch := range(chs) {
-		err := <- ch
+	for i, ch := range chs {
+		err := <-ch
 		if err != nil {
-			log.Println("处理<" + records[i].RawURL +">时出错")
+			log.Println("处理<" + records[i].RawURL + ">时出错")
 			return err
 		}
 	}
@@ -260,4 +260,20 @@ func isFailed(err error) bool {
 		return true
 	}
 	return false
+}
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	f, _ := os.Create("/var/log/leecher-server.log")
+	defer f.Close()
+	log.SetOutput(f)
+
+	http.HandleFunc("/", Handler)
+
+	log.Printf("Listening on port %s\n\n", port)
+	http.ListenAndServe(":"+port, nil)
 }
