@@ -5,6 +5,6 @@ deploy:
     - hotakasaito/elastic-beanstalk-deploy:
         key: $AWS_ACCESS_KEY_ID
         secret: $AWS_SECRET_KEY
-        app_name: appname
-        env_name: staging
+        app_name: douban-leecher
+        env_name: Sample-env
         region: ap-northeast-1
