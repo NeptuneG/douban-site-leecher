@@ -2,6 +2,11 @@ box: debian
 
 deploy:
   steps:
+    - script:
+      name: install git
+      code: |
+          apt-get update
+          apt-get install git -y
     - hotakasaito/elastic-beanstalk-deploy:
         key: $AWS_ACCESS_KEY_ID
         secret: $AWS_SECRET_KEY
