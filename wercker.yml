@@ -1,0 +1,8 @@
+box: wercker/default
+
+deploy:
+    steps:
+        - s3sync:
+            key-id: $S3_ACCESS_KEY_ID
+            key-secret: $S3_SECRET_KEY
+            bucket-url: $S3_BUCKET_NAME
