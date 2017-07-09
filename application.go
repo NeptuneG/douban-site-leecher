@@ -58,12 +58,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		// 创建临时文件夹用存放下载文件以供打包
 		tmpDirName := getTimeStamp()
-		tmpFileName := tmpDirName + ".zip"
-		err = os.Mkdir(tmpDirName, os.ModeDir)
-		if isFailed(err) {
-			return
-		}
-
 		reader := bufio.NewReaderSize(response.Body, bufferSize)
 		for {
 			buf := make([]byte, 0)
@@ -80,7 +74,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				records := make([]Record, 0)
 				strJSON := getJSONstring(line)
 				err = json.Unmarshal([]byte(strJSON), &records)
-				if isFailed(err) {
+				if isFailed(err) || len(records) == 0 {
 					return
 				}
 				err = download(tmpDirName, records)
@@ -88,6 +82,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+		}
+
+		tmpFileName := tmpDirName + ".zip"
+		err = os.Mkdir(tmpDirName, os.ModeDir)
+		if isFailed(err) {
+			return
 		}
 
 		err = zipit(tmpDirName, tmpFileName)
