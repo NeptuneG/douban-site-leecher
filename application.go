@@ -45,78 +45,88 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		url, err := getURL(r.FormValue("URI"))
-		if isFailed(err) {
-			return
-		}
+		http.Redirect(w, r, "/download/"+r.FormValue("URI"), 302)
+	}
+}
 
-		response, err := http.Get(url)
-		if isFailed(err) {
-			return
-		}
-		defer response.Body.Close()
+func download(w http.ResponseWriter, r *http.Request) {
+	url, err := getURL(r.URL.Path)
+	if isFailed(err) {
+		return
+	}
 
-		// 创建临时文件夹用存放下载文件以供打包
-		tmpDirName := getTimeStamp()
-		reader := bufio.NewReaderSize(response.Body, bufferSize)
-		for {
-			buf := make([]byte, 0)
-			buf, _, err := reader.ReadLine()
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-			}
+	response, err := http.Get(url)
+	if isFailed(err) {
+		return
+	}
+	defer response.Body.Close()
 
-			line := string(buf)
+	// 创建临时文件夹用存放下载文件以供打包
+	tmpDirName := getTimeStamp()
+	err = os.Mkdir(tmpDirName, os.ModeDir)
+	if isFailed(err) {
+		return
+	}
 
-			if isSongRecords(line) {
-				records := make([]Record, 0)
-				strJSON := getJSONstring(line)
-				err = json.Unmarshal([]byte(strJSON), &records)
-				if isFailed(err) || len(records) == 0 {
-					return
-				}
-				err = download(tmpDirName, records)
-				if isFailed(err) {
-					return
-				}
+	reader := bufio.NewReaderSize(response.Body, bufferSize)
+	hasRecords := false
+	for {
+		buf := make([]byte, 0)
+		buf, _, err := reader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				break
 			}
 		}
 
-		tmpFileName := tmpDirName + ".zip"
-		err = os.Mkdir(tmpDirName, os.ModeDir)
-		if isFailed(err) {
-			return
-		}
+		line := string(buf)
 
-		err = zipit(tmpDirName, tmpFileName)
-		if isFailed(err) {
-			return
+		if isSongRecords(line) {
+			hasRecords = true
+			records := make([]Record, 0)
+			strJSON := getJSONstring(line)
+			err = json.Unmarshal([]byte(strJSON), &records)
+			if isFailed(err) {
+				return
+			}
+			err = downloadRecords(tmpDirName, records)
+			if isFailed(err) {
+				return
+			}
 		}
+	}
 
-		file, err := os.Open(tmpFileName)
-		if isFailed(err) {
-			return
-		}
-		_, err = io.Copy(w, file)
-		if isFailed(err) {
-			return
-		}
-		err = file.Close()
-		if isFailed(err) {
-			return
-		}
+	if !hasRecords {
+		return
+	}
 
-		err = removeTmpFiles(tmpFileName, tmpDirName)
-		if isFailed(err) {
-			return
-		}
+	tmpFileName := tmpDirName + ".zip"
+	err = zipit(tmpDirName, tmpFileName)
+	if isFailed(err) {
+		return
+	}
+
+	file, err := os.Open(tmpFileName)
+	if isFailed(err) {
+		return
+	}
+	_, err = io.Copy(w, file)
+	if isFailed(err) {
+		return
+	}
+	err = file.Close()
+	if isFailed(err) {
+		return
+	}
+
+	err = removeTmpFiles(tmpFileName, tmpDirName)
+	if isFailed(err) {
+		return
 	}
 }
 
 func getURL(arg string) (string, error) {
-	return defaultURL + arg, nil
+	return defaultURL + strings.Split(arg, "/")[2], nil
 }
 
 func isSongRecords(line string) bool {
@@ -128,7 +138,7 @@ func getJSONstring(line string) string {
 	return line[strings.Index(line, jsonPrefix) : strings.LastIndex(line, jsonSuffix)+len(jsonSuffix)]
 }
 
-func download(targetDir string, records []Record) error {
+func downloadRecords(targetDir string, records []Record) error {
 	chs := make([]chan error, len(records))
 	for i, record := range records {
 		chs[i] = make(chan error)
@@ -273,6 +283,7 @@ func main() {
 	log.SetOutput(f)
 
 	http.HandleFunc("/", Handler)
+	http.HandleFunc("/download/", download)
 
 	log.Printf("Listening on port %s\n\n", port)
 	http.ListenAndServe(":"+port, nil)
