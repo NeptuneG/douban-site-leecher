@@ -110,6 +110,7 @@ func download(w http.ResponseWriter, r *http.Request) {
 	if isFailed(err) {
 		return
 	}
+	w.Header().Set("Content-Type", "application/zip")
 	_, err = io.Copy(w, file)
 	if isFailed(err) {
 		return
