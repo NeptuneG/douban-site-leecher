@@ -280,7 +280,11 @@ func main() {
 		port = "3000"
 	}
 
-	f, _ := os.Create("/var/log/web-1.log")
+	f, err := os.Create("/var/log/leecher-server.log")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, err.Error())
+		return
+	}
 	defer f.Close()
 	log.SetOutput(f)
 
